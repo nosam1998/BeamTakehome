@@ -27,12 +27,19 @@ type EchoResponse struct {
 	Value string
 }
 
+type File struct {
+	Name    string
+	Ext     string
+	Path    string
+	Content *string
+}
+
 type SyncRequest struct {
 	BaseRequest
-	Data string
+	Data *File
 }
 
 type SyncResponse struct {
 	BaseResponse
-	Data string
+	Message string
 }

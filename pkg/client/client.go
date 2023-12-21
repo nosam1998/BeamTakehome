@@ -148,3 +148,38 @@ func (r *Client) Echo(value string) (string, error) {
 
 	return response.Value, err
 }
+
+func (r *Client) Sync(file *common.File) (string, error) {
+	requestId := uuid.NewString()
+
+	var request *common.SyncRequest = &common.SyncRequest{
+		BaseRequest: common.BaseRequest{
+			RequestId:   requestId,
+			RequestType: string(common.Sync),
+		},
+		Data: file,
+	}
+
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return "", err
+	}
+
+	r.channels[requestId] = make(chan []byte)
+
+	err = r.tx(payload)
+	if err != nil {
+		return "", err
+	}
+
+	var response common.SyncResponse = common.SyncResponse{}
+
+	msg := <-r.channels[requestId]
+	err = json.Unmarshal(msg, &response)
+	if err != nil {
+		log.Println("Unable to handle sync response: ", err)
+		return "", err
+	}
+
+	return response.Message, err
+}

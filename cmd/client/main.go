@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
 	client "slai.io/takehome/pkg/client"
+	"slai.io/takehome/pkg/common"
 )
 
 func main() {
@@ -16,16 +18,36 @@ func main() {
 	}
 
 	someMessage := "hello there"
+
+	// Test variables soon...
+	alreadySent := false
+	filePath := "/home/mason/code/BeamTakehome/cmd/client/testfile.txt"
+
+	// TODO: Implement file watcher
 	for {
+		log.Printf("Sending: '%s'", filePath)
 
-		log.Printf("Sending: '%s'", someMessage)
+		if !alreadySent {
+			data, err := common.FileToBase64(filePath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			serverMessage, err := c.Sync(data)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("[Server] %s", serverMessage)
+			alreadySent = true
+		} else {
+			log.Printf("Sending: '%s'", someMessage)
 
-		value, err := c.Echo(someMessage)
-		if err != nil {
-			log.Fatal("Unable to send request.")
+			value, err := c.Echo(someMessage)
+			if err != nil {
+				log.Fatal("Unable to send request.")
+			}
+
+			log.Printf("Received: '%s'", value)
 		}
-
-		log.Printf("Received: '%s'", value)
 
 		time.Sleep(time.Second)
 	}

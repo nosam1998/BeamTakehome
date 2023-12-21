@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 
 	"github.com/gorilla/websocket"
@@ -49,12 +50,18 @@ func HandleSync(msg []byte, client *Client) error {
 		log.Fatal("Invalid sync request.")
 	}
 
+	res, err := common.WriteFile(request.Data)
+	if err != nil {
+		return err
+	}
+	fmt.Println(res)
+
 	response := &common.SyncResponse{
 		BaseResponse: common.BaseResponse{
 			RequestId:   request.RequestId,
 			RequestType: request.RequestType,
 		},
-		Data: request.Data,
+		Message: "Writing file",
 	}
 
 	responsePayload, err := json.Marshal(response)
