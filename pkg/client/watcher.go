@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-var wg sync.WaitGroup
-
 type Watcher struct {
 	Root      string
 	Previous  map[string]common.FileInfo
