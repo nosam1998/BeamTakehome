@@ -3,53 +3,44 @@ package main
 import (
 	"fmt"
 	"log"
+	"slai.io/takehome/pkg/common"
 	"time"
 
 	client "slai.io/takehome/pkg/client"
-	"slai.io/takehome/pkg/common"
 )
 
 func main() {
 	log.Println("Starting client...")
 
-	c, err := client.NewClient("./")
+	c, err := client.NewClient("./testing/clientdir")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	someMessage := "hello there"
+	fmt.Printf("Watching - Waiting for %d seconds between checks...\n", int(c.Watcher.Delay.Seconds()))
 
-	// Test variables soon...
-	alreadySent := false
-	filePath := "/home/mason/code/BeamTakehome/cmd/client/testfile.txt"
-
-	// TODO: Implement file watcher
 	for {
-		log.Printf("Sending: '%s'", filePath)
-
-		if !alreadySent {
-			data, err := common.FileToBase64(filePath)
-			if err != nil {
-				log.Fatal(err)
-			}
-			serverMessage, err := c.Sync(data)
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Printf("[Server] %s", serverMessage)
-			alreadySent = true
-		} else {
-			log.Printf("Sending: '%s'", someMessage)
-
-			value, err := c.Echo(someMessage)
-			if err != nil {
-				log.Fatal("Unable to send request.")
-			}
-
-			log.Printf("Received: '%s'", value)
+		err := c.Watcher.Run()
+		if err != nil {
+			fmt.Println(err)
+			return
 		}
 
-		time.Sleep(time.Second)
+		if len(c.Watcher.SyncQueue) > 0 {
+			for _, path := range c.Watcher.SyncQueue {
+				data, err := common.FileToBase64(path)
+				if err != nil {
+					fmt.Println(err)
+				} else {
+					serverMessage, err := c.Sync(data)
+					if err != nil {
+						return
+					}
+					fmt.Printf("[Server] %s\n", serverMessage)
+				}
+			}
+			c.Watcher.SyncQueue = []string{}
+		}
+		time.Sleep(c.Watcher.Delay)
 	}
-
 }

@@ -18,8 +18,17 @@ type Client struct {
 
 const addr = "localhost:5555"
 
+// This can easily be an environment variable in the future.
+const OutputDir string = "./testing/output"
+
 var upgrader = websocket.Upgrader{}
 var wg sync.WaitGroup
+
+func init() {
+	if err := common.MakeDir(OutputDir); err != nil {
+		log.Fatal(err)
+	}
+}
 
 func handleMessage(w http.ResponseWriter, r *http.Request) {
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
@@ -35,7 +44,12 @@ func handleMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println("Connected to host: ", client.host)
-
+	path, err := common.GetDefaultPath()
+	if err != nil {
+		log.Println("Path error: ", err)
+		return
+	}
+	log.Println("Default path: ", path)
 	defer c.Close()
 	defer wg.Wait()
 
@@ -67,5 +81,5 @@ func StartServer() {
 	flag.Parse()
 	http.HandleFunc("/", handleMessage)
 	log.Println("Starting server @", addr)
-	log.Fatal((http.ListenAndServe(addr, nil)))
+	log.Fatal(http.ListenAndServe(addr, nil))
 }

@@ -2,18 +2,18 @@ package client
 
 import (
 	"encoding/json"
-	"log"
-
+	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"log"
+	"path/filepath"
 	"slai.io/takehome/pkg/common"
+	"time"
 )
 
 const maxConnectionAttempts = 100
 const hostURL = "ws://localhost:5555/"
-
-func init() {
-}
 
 type Client struct {
 	Directory string
@@ -22,15 +22,25 @@ type Client struct {
 	connected bool
 	hostURL   string
 	channels  map[string]chan []byte
+	*Watcher
 }
 
 func NewClient(directory string) (*Client, error) {
+	absDir, err := filepath.Abs(directory)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("Watching AbsDir: %s\n", absDir)
+
+	w := NewWatcher(absDir, time.Second*5)
+
 	var client *Client = &Client{
 		Directory: directory,
 		hostURL:   hostURL,
+		Watcher:   w,
 	}
 
-	err := client.connect()
+	err = client.connect()
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +88,8 @@ func (c *Client) connect() error {
 func (c *Client) rx() {
 	for {
 		_, message, err := c.ws.ReadMessage()
-		if ce, ok := err.(*websocket.CloseError); ok {
+		var ce *websocket.CloseError
+		if errors.As(err, &ce) {
 
 			switch ce.Code {
 			case websocket.CloseNormalClosure,
