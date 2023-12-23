@@ -19,7 +19,7 @@ type Client struct {
 const addr = "localhost:5555"
 
 // This can easily be an environment variable in the future.
-const OutputDir string = "./testing/output"
+const OutputDir string = "./testing/server/"
 
 var upgrader = websocket.Upgrader{}
 var wg sync.WaitGroup

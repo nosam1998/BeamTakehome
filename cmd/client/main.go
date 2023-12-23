@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"slai.io/takehome/pkg/common"
 	"time"
 
 	client "slai.io/takehome/pkg/client"
@@ -12,7 +11,7 @@ import (
 func main() {
 	log.Println("Starting client...")
 
-	c, err := client.NewClient("./testing/clientdir")
+	c, err := client.NewClient("./testing/client")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -27,19 +26,10 @@ func main() {
 		}
 
 		if len(c.Watcher.SyncQueue) > 0 {
-			for _, path := range c.Watcher.SyncQueue {
-				data, err := common.FileToBase64(path)
-				if err != nil {
-					fmt.Println(err)
-				} else {
-					serverMessage, err := c.Sync(data)
-					if err != nil {
-						return
-					}
-					fmt.Printf("[Server] %s\n", serverMessage)
-				}
+			err := c.SyncWatcherQueue()
+			if err != nil {
+				log.Println(err)
 			}
-			c.Watcher.SyncQueue = []string{}
 		}
 		time.Sleep(c.Watcher.Delay)
 	}

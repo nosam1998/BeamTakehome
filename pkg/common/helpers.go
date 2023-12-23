@@ -30,7 +30,6 @@ func WriteFile(file *File, path string) error {
 	}
 
 	relFilePath := filepath.Join(root, file.Name)
-	fmt.Println("Wrote file: ", relFilePath)
 
 	filePtr, err := os.OpenFile(relFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, file.Mode)
 	if err != nil {

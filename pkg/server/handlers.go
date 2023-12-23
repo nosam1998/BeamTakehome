@@ -40,8 +40,6 @@ func HandleEcho(msg []byte, client *Client) error {
 }
 
 func HandleSync(msg []byte, client *Client) error {
-	log.Println("Received SYNC request.")
-
 	var request common.SyncRequest
 	err := json.Unmarshal(msg, &request)
 	if err != nil {
@@ -52,7 +50,9 @@ func HandleSync(msg []byte, client *Client) error {
 		err := common.WriteFile(request.Data, OutputDir)
 		if err != nil {
 			fmt.Printf("Error writing file %s\n", request.Data.Path)
+			return
 		}
+		log.Println("[SYNC] ", request.Data.FileInfo.Name)
 	}()
 	if err != nil {
 		return err
@@ -63,7 +63,7 @@ func HandleSync(msg []byte, client *Client) error {
 			RequestId:   request.RequestId,
 			RequestType: request.RequestType,
 		},
-		Message: "Writing file",
+		Message: fmt.Sprintf("Syncing file \"%s\"", request.Data.Path),
 	}
 
 	responsePayload, err := json.Marshal(response)

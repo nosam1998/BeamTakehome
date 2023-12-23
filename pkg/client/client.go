@@ -124,6 +124,28 @@ func (c *Client) tx(msg []byte) error {
 	return nil
 }
 
+func (c *Client) SyncWatcherQueue() error {
+	var retryQueue []string
+	for _, path := range c.Watcher.SyncQueue {
+		data, err := common.FileToBase64(path)
+		if err != nil {
+			retryQueue = append(retryQueue, path)
+			fmt.Println(err)
+			continue
+		}
+
+		serverMessage, err := c.Sync(data)
+		if err != nil {
+			retryQueue = append(retryQueue, path)
+			fmt.Println(err)
+			continue
+		}
+		fmt.Printf("[Server] %s\n", serverMessage)
+	}
+	c.Watcher.SyncQueue = retryQueue
+	return nil
+}
+
 // Request implementations
 func (r *Client) Echo(value string) (string, error) {
 	requestId := uuid.NewString()
