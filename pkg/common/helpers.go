@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 )
 
 func EncodeToBase64(data *[]byte) *string {
@@ -54,14 +56,33 @@ func WriteFile(file *File, path string) error {
 	return nil
 }
 
+func subtractTime(t time.Time, duration time.Duration) time.Time {
+	return t.Add(-duration)
+}
+
+func getDefaultLastSyncModTime(t time.Time) time.Time {
+	return subtractTime(t, 1*time.Second)
+}
+
 func NewFileInfo(info fs.FileInfo) FileInfo {
 	return FileInfo{
-		Name:    info.Name(),
-		Size:    info.Size(),
-		Mode:    info.Mode(),
-		ModTime: info.ModTime(),
-		IsDir:   info.IsDir(),
-		Sys:     info.Sys(),
+		Name:            info.Name(),
+		Size:            info.Size(),
+		Mode:            info.Mode(),
+		CurrModTime:     info.ModTime(),
+		LastSyncModTime: getDefaultLastSyncModTime(info.ModTime()),
+		IsDir:           info.IsDir(),
+		Sys:             info.Sys(),
+	}
+}
+
+func NewSingleSync() SingleSync {
+	return SingleSync{
+		EncodeComplete: false,
+		SyncComplete:   false,
+		EncodeChan:     make(chan string),
+		SyncChan:       make(chan *File),
+		Wg:             &sync.WaitGroup{},
 	}
 }
 
@@ -91,13 +112,15 @@ func FileToBase64(path string) (*File, error) {
 	}
 
 	encodedData := EncodeToBase64(&data)
-
-	return &File{
+	f := &File{
 		FileInfo: NewFileInfo(fileInfo),
+		Key:      path,
 		Ext:      filepath.Ext(path),
 		Path:     filepath.Dir(path),
 		Content:  encodedData,
-	}, nil
+	}
+
+	return f, nil
 }
 
 func MakeDir(path string) error {

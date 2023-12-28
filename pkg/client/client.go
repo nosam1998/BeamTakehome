@@ -3,13 +3,14 @@ package client
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"log"
 	"path/filepath"
-	"slai.io/takehome/pkg/common"
+	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
+	"slai.io/takehome/pkg/common"
 )
 
 const maxConnectionAttempts = 100
@@ -22,7 +23,8 @@ type Client struct {
 	connected bool
 	hostURL   string
 	channels  map[string]chan []byte
-	*Watcher
+	mu        sync.Mutex
+	Watcher   *Watcher
 }
 
 func NewClient(directory string) (*Client, error) {
@@ -30,10 +32,10 @@ func NewClient(directory string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("Watching AbsDir: %s\n", absDir)
+	log.Printf("Watching: %s\n", absDir)
 
-	w := NewWatcher(absDir, time.Second*5)
-
+	w := NewWatcher(absDir, time.Second*10)
+	*w.SingleSync = common.NewSingleSync()
 	var client *Client = &Client{
 		Directory: directory,
 		hostURL:   hostURL,
@@ -124,26 +126,25 @@ func (c *Client) tx(msg []byte) error {
 	return nil
 }
 
-func (c *Client) SyncWatcherQueue() error {
-	var retryQueue []string
-	for _, path := range c.Watcher.SyncQueue {
-		data, err := common.FileToBase64(path)
-		if err != nil {
-			retryQueue = append(retryQueue, path)
-			fmt.Println(err)
-			continue
-		}
-
-		serverMessage, err := c.Sync(data)
-		if err != nil {
-			retryQueue = append(retryQueue, path)
-			fmt.Println(err)
-			continue
-		}
-		fmt.Printf("[Server] %s\n", serverMessage)
+func (c *Client) SyncFromChannel() {
+	for file := range c.Watcher.SingleSync.SyncChan {
+		// Loop variables captured by 'func' literals in 'go' statements might have unexpected values
+		file := file
+		c.Watcher.SingleSync.Wg.Add(1)
+		go func() {
+			serverMessage, err := c.Sync(file)
+			defer c.Watcher.SingleSync.Wg.Done()
+			if err != nil {
+				log.Printf("[ERROR] Cannot sync file (%s)\n", file.GetFilePath())
+			} else {
+				c.Watcher.UpdateLastSyncedTime(file.Key, file.FileInfo.CurrModTime)
+				log.Printf("[SERVER] %s\n", serverMessage)
+			}
+		}()
 	}
-	c.Watcher.SyncQueue = retryQueue
-	return nil
+
+	defer c.Watcher.SingleSync.CompleteSync()
+	c.Watcher.SingleSync.Wg.Wait()
 }
 
 // Request implementations
@@ -183,6 +184,9 @@ func (r *Client) Echo(value string) (string, error) {
 }
 
 func (r *Client) Sync(file *common.File) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	requestId := uuid.NewString()
 
 	var request *common.SyncRequest = &common.SyncRequest{
@@ -214,5 +218,5 @@ func (r *Client) Sync(file *common.File) (string, error) {
 		return "", err
 	}
 
-	return response.Message, err
+	return response.Message, nil
 }

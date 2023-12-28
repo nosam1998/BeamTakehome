@@ -1,0 +1,30 @@
+version: "3"
+
+services:
+  server:
+    build:
+      context: .
+      args:
+        BUILD_TARGET: "server"
+    networks:
+      - beamTakeHome
+    volumes:
+      - "server:/testing/server"
+  client:
+    build:
+      context: .
+      args:
+        BUILD_TARGET: "client"
+    depends_on:
+      - server
+    networks:
+      - beamTakeHome
+    volumes:
+      - "client:/testing/client"
+
+volumes:
+  server:
+  client:
+
+networks:
+  beamTakeHome:

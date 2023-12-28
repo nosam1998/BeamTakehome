@@ -1,11 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"time"
-
 	client "slai.io/takehome/pkg/client"
+	"sync"
+	"time"
 )
 
 func main() {
@@ -16,21 +15,25 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Watching - Waiting for %d seconds between checks...\n", int(c.Watcher.Delay.Seconds()))
-
+	log.Printf("Watching - Waiting for %d seconds between checks...\n", int(c.Watcher.Delay.Seconds()))
 	for {
-		err := c.Watcher.Run()
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
+		var wg sync.WaitGroup
 
-		if len(c.Watcher.SyncQueue) > 0 {
-			err := c.SyncWatcherQueue()
-			if err != nil {
-				log.Println(err)
-			}
-		}
+		go func() {
+			wg.Add(1)
+			defer wg.Done()
+			defer c.Watcher.SingleSync.CompleteSync()
+			c.SyncFromChannel()
+		}()
+
+		go func() {
+			wg.Add(1)
+			defer wg.Done()
+			defer c.Watcher.SingleSync.CompleteEncode()
+			c.Watcher.Run()
+		}()
+
+		wg.Wait()
 		time.Sleep(c.Watcher.Delay)
 	}
 }

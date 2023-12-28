@@ -3,19 +3,25 @@ package client
 import (
 	"fmt"
 	"io/fs"
+	"log"
 	"path/filepath"
-	"slai.io/takehome/pkg/common"
 	"sync"
 	"time"
+
+	"slai.io/takehome/pkg/common"
 )
 
 type Watcher struct {
-	Root      string
-	Previous  map[string]common.FileInfo
-	Delay     time.Duration
-	SyncQueue []string
-	absRoot   string
-	wg        sync.WaitGroup
+	Root       string
+	FileMap    map[string]common.FileInfo
+	Delay      time.Duration
+	absRoot    string
+	Wg         *sync.WaitGroup
+	SingleSync *common.SingleSync
+}
+
+func (w *Watcher) ResetSingleSync() {
+	common.ResetSingleSync(w.SingleSync)
 }
 
 func NewWatcher(path string, delay time.Duration) *Watcher {
@@ -23,72 +29,90 @@ func NewWatcher(path string, delay time.Duration) *Watcher {
 	if err != nil {
 		return nil
 	}
+
 	w := &Watcher{
-		Root:      path,
-		Previous:  make(map[string]common.FileInfo),
-		Delay:     delay,
-		SyncQueue: make([]string, 0),
-		absRoot:   absRoot,
-		wg:        sync.WaitGroup{},
+		Root:    path,
+		FileMap: make(map[string]common.FileInfo),
+		Delay:   delay,
+		absRoot: absRoot,
+		SingleSync: &common.SingleSync{
+			EncodeComplete: false,
+			SyncComplete:   false,
+			EncodeChan:     make(chan string),
+			SyncChan:       make(chan *common.File),
+			Wg:             &sync.WaitGroup{},
+		},
 	}
 
 	return w
 }
 
-func (w *Watcher) walkFunc(path string, d fs.DirEntry, err error) error {
-	if err != nil {
-		fmt.Printf("error occured when walking directory: %s\n", err)
-		return err
-	}
-
-	if !d.IsDir() {
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		if w.IsNew(path, &info) {
-			w.SyncQueue = append(w.SyncQueue, path)
-		}
-	}
-	return nil
-}
-
 func (w *Watcher) SeenPreviously(key string) bool {
-	_, ok := w.Previous[key]
+	_, ok := w.FileMap[key]
 	return ok
 }
 
 func (w *Watcher) AddKey(path string, info *fs.FileInfo) {
-	w.Previous[path] = common.NewFileInfo(*info)
+	w.FileMap[path] = common.NewFileInfo(*info)
 }
 
 func (w *Watcher) RemoveKey(key string) {
-	delete(w.Previous, key)
+	delete(w.FileMap, key)
 }
 
-func (w *Watcher) IsNew(key string, info *fs.FileInfo) bool {
-	// Returns true if we've never seen the key before (New file)
-	// OR if the file has been seen, but has a more recent modified time.
-	val, ok := w.Previous[key]
-	fi := common.NewFileInfo(*info)
-	if ok && fi.ModTime.After(val.ModTime) {
-		fmt.Println("New version of ", key)
-		return true
+func (w *Watcher) IsModified(key string, CurrentModTime time.Time) bool {
+	// This function makes the assumption that the key already exists.
+	// If you don't know if the key exists, then use the SeenPreviously() function first.
+	val, ok := w.FileMap[key]
+	if !ok {
+		log.Fatalf("File at path (%s) doens't exist. Please make sure the file exists before checking if it's been modified.", key)
 	}
 
-	if !ok {
-		w.AddKey(key, info)
-		fmt.Println("New file ", key)
+	if val.CurrModTime.After(CurrentModTime) {
 		return true
 	}
 
 	return false
 }
 
-func (w *Watcher) Run() error {
-	err := filepath.WalkDir(w.absRoot, w.walkFunc)
-	if err != nil {
-		return err
+func (w *Watcher) UpdateLastSyncedTime(path string, CurrentModTime time.Time) {
+	val, ok := w.FileMap[path]
+	if !ok {
+		log.Printf("Key \"%s\" doesn't exist.", path)
+		return
 	}
-	return nil
+	val.LastSyncModTime = CurrentModTime
+	w.FileMap[path] = val
+}
+
+func (w *Watcher) Run() {
+	var wg sync.WaitGroup
+	err := filepath.WalkDir(w.absRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return fmt.Errorf("error occured when walking directory: %s\n", err)
+		}
+
+		if !d.IsDir() {
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			if w.SeenPreviously(path) {
+				if w.IsModified(path, info.ModTime()) {
+					wg.Add(1)
+					go w.SingleSync.EncodeFile(path, &wg)
+				}
+			} else {
+				w.AddKey(path, &info)
+				wg.Add(1)
+				go w.SingleSync.EncodeFile(path, &wg)
+			}
+		}
+		return nil
+	})
+
+	wg.Wait()
+	if err != nil {
+		log.Printf("ERROR %s", err)
+	}
 }

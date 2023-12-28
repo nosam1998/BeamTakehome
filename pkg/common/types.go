@@ -2,6 +2,7 @@ package common
 
 import (
 	"io/fs"
+	"sync"
 	"time"
 )
 
@@ -33,19 +34,29 @@ type EchoResponse struct {
 }
 
 type FileInfo struct {
-	Name    string
-	Size    int64
-	Mode    fs.FileMode
-	ModTime time.Time
-	IsDir   bool
-	Sys     any
+	Name            string
+	Size            int64
+	Mode            fs.FileMode
+	CurrModTime     time.Time
+	LastSyncModTime time.Time
+	IsDir           bool
+	Sys             any
 }
 
 type File struct {
 	FileInfo
+	Key     string
 	Ext     string
 	Path    string
 	Content *string
+}
+
+type SingleSync struct {
+	EncodeComplete bool
+	SyncComplete   bool
+	EncodeChan     chan string
+	SyncChan       chan *File
+	Wg             *sync.WaitGroup
 }
 
 type SyncRequest struct {

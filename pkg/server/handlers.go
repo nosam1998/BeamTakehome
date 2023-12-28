@@ -3,8 +3,9 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/websocket"
 	"log"
+
+	"github.com/gorilla/websocket"
 	"slai.io/takehome/pkg/common"
 )
 
@@ -49,7 +50,7 @@ func HandleSync(msg []byte, client *Client) error {
 	go func() {
 		err := common.WriteFile(request.Data, OutputDir)
 		if err != nil {
-			fmt.Printf("Error writing file %s\n", request.Data.Path)
+			log.Printf("Error writing file %s\n", request.Data.Path)
 			return
 		}
 		log.Println("[SYNC] ", request.Data.FileInfo.Name)
@@ -63,7 +64,7 @@ func HandleSync(msg []byte, client *Client) error {
 			RequestId:   request.RequestId,
 			RequestType: request.RequestType,
 		},
-		Message: fmt.Sprintf("Syncing file \"%s\"", request.Data.Path),
+		Message: fmt.Sprintf("Syncing file: %s", request.Data.GetFilePath()),
 	}
 
 	responsePayload, err := json.Marshal(response)
