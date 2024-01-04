@@ -124,7 +124,7 @@ func FileToBase64(path string) (*File, error) {
 }
 
 func MakeDir(path string) error {
-	err := os.MkdirAll(path, os.ModeDir)
+	err := os.MkdirAll(path, 0777)
 	if err != nil {
 		return err
 	}

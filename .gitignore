@@ -1,3 +1,4 @@
 tmp/**
 testing/server/*
 testing/client/*
+bin/*

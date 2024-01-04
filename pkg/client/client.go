@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -32,6 +33,13 @@ func NewClient(directory string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if _, err := os.Stat(absDir); err != nil {
+		// If the directory doesn't exist, then create it.
+		log.Printf("Directory doesn't exist, creating it instead: %s", absDir)
+		os.MkdirAll(absDir, 0777)
+	}
+
 	log.Printf("Watching: %s\n", absDir)
 
 	w := NewWatcher(absDir, time.Second*10)
